@@ -1,0 +1,35 @@
+Provinsi,Produksi_Harian_kWh,Faktor_Emisi_kg_per_kWh
+Aceh,3.55,0.78
+Sumatera Utara,3.5,0.78
+Sumatera Barat,3.6,0.78
+Riau,3.55,0.78
+Jambi,3.6,0.78
+Sumatera Selatan,3.65,0.78
+Bengkulu,3.65,0.78
+Lampung,3.7,0.78
+Kepulauan Bangka Belitung,3.65,0.85
+Kepulauan Riau,3.6,0.85
+DKI Jakarta,3.82,0.87
+Jawa Barat,3.65,0.87
+Jawa Tengah,3.9,0.87
+DI Yogyakarta,4.05,0.87
+Jawa Timur,4.21,0.87
+Banten,3.75,0.87
+Bali,4.5,0.87
+Nusa Tenggara Barat,4.6,0.75
+Nusa Tenggara Timur,4.8,0.75
+Kalimantan Barat,3.7,0.85
+Kalimantan Tengah,3.75,0.85
+Kalimantan Selatan,3.8,0.85
+Kalimantan Timur,3.75,0.85
+Kalimantan Utara,3.7,0.85
+Sulawesi Utara,3.9,0.65
+Sulawesi Tengah,4.0,0.65
+Sulawesi Selatan,4.1,0.65
+Sulawesi Tenggara,4.05,0.65
+Gorontalo,4.0,0.65
+Sulawesi Barat,3.95,0.65
+Maluku,4.1,0.9
+Maluku Utara,4.05,0.9
+Papua,4.2,0.9
+Papua Barat,4.15,0.9
