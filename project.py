@@ -467,7 +467,6 @@ tab1, tab2, tab3 = st.tabs(["📉 Analisis Biaya & Kemandirian", "🌍 Analisis 
 with tab1:
     st.subheader("Komparasi Biaya Listrik Bulanan")
     
-    
     data_biaya = pd.DataFrame({
         'Kategori': ['Tagihan Awal', 'Tagihan Akhir (Dampak PV)'],
         'Dibayar ke PLN': [tagihan_bulanan, tagihan_baru],
@@ -483,7 +482,7 @@ with tab1:
     bar_pln = ax.bar(data_biaya['Kategori'][1], data_biaya['Dibayar ke PLN'][1], color='#e74c3c', label='Masih Dibayar (PLN)')
     bar_pv = ax.bar(data_biaya['Kategori'][1], data_biaya['Disuplai PV'][1], bottom=data_biaya['Dibayar ke PLN'][1], color='#2ecc71', label='Disuplai PV (Hemat)')
     
-    # Menambahkan Label Angka di Atas Bar (Agar mudah dibaca orang awam)
+    # Menambahkan Label Angka di Atas Bar
     ax.bar_label(bar_awal, fmt='Rp %.0f', padding=5)
     total_akhir = tagihan_baru + penghematan_rp
     ax.text(data_biaya['Kategori'][1], total_akhir, f'Rp {total_akhir:,.0f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
@@ -496,13 +495,14 @@ with tab1:
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     
     st.pyplot(fig)
+    plt.close(fig) # <--- TAMBAHKAN BARIS INI
+    
     st.progress(int(skor_kemandirian))
     st.caption(f"Skor Kemandirian Energi Anda adalah **{skor_kemandirian:.1f}%**.")
 
 # GRAFIK 2: Analisis Emisi (Donut Chart)
 with tab2:
     st.subheader("Porsi Pengurangan Jejak Karbon")
-    
     
     labels_donut = ['Emisi yang Dicegah', 'Emisi yang Tersisa']
     sizes_donut = [emisi_dicegah_grafik, emisi_tersisa_pln] 
@@ -515,7 +515,7 @@ with tab2:
         sizes_donut, 
         labels=labels_donut, 
         colors=colors_donut, 
-        autopct=lambda p: '{:.1f}%\n({:.1f} kg)'.format(p, p * emisi_awal_total / 100) if p > 0 else '', # Hanya tampilkan jika porsi > 0
+        autopct=lambda p: '{:.1f}%\n({:.1f} kg)'.format(p, p * emisi_awal_total / 100) if p > 0 else '',
         startangle=90, 
         pctdistance=0.75, 
         wedgeprops=dict(width=0.4)
@@ -527,6 +527,7 @@ with tab2:
 
     ax2.set_title(f'Total Jejak Karbon Awal: {emisi_awal_total:.1f} kg CO₂/Bulan', fontsize=14)
     st.pyplot(fig2)
+    plt.close(fig2) # <--- TAMBAHKAN BARIS INI
     
     st.info(f"Dengan PV, Anda berhasil mengurangi emisi sebesar **{emisi_dicegah_grafik:.1f} kg CO₂** dari konsumsi rumah Anda.")
 
@@ -546,5 +547,3 @@ with tab3:
             f"{faktor_emisi_lokal:.2f} kg CO₂/kWh",
             f"{radiasi_harian:.2f} kWh/hari"
         ]
->>>>>>> 0e527430d4bc0d361b7552a0fc23c8fa75fc605a
-    }))
