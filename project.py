@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import plotly.express as px # Mengimpor Plotly untuk visualisasi interaktif
+import plotly.express as px # Digunakan untuk Bar Chart interaktif
 
-# --- PERBAIKAN STABILITAS MATPLOTLIB (FIX PENTING UNTUK CLOUD) ---
+# --- PERBAIKAN STABILITAS MATPLOTLIB ---
 import matplotlib 
 matplotlib.use('Agg') 
-# -------------------------------------------------------------------
+# ----------------------------------------
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Eco-Cost Analyzer", layout="wide")
@@ -32,26 +32,36 @@ def format_rupiah(x):
 
 @st.cache_data
 def load_data(file_path):
-    """Memuat data, mencoba kedua delimiter, dan mengonversi format desimal."""
+    """
+    Memuat data dari CSV, mencoba delimiter koma atau titik koma,
+    membersihkan karakter non-angka, dan mengonversi ke tipe numerik.
+    """
     try:
+        # Coba delimiter koma
         df = pd.read_csv(file_path, delimiter=',')
+        # Jika kolom hanya sedikit (biasanya berarti delimiter salah), coba titik koma
         if len(df.columns) <= 2:
             df = pd.read_csv(file_path, delimiter=';')
 
+        # Hapus kolom 'No.' jika ada
         if df.columns[0].lower() in ['no', 'no.']:
-            df = df.iloc[:, 1:] 
+            df = df.iloc[:, 1:].copy() 
             
         df.columns = ['Provinsi', 'Produksi_Harian_kWh', 'Faktor_Emisi_kg_per_kWh']
         
         for col in ['Produksi_Harian_kWh', 'Faktor_Emisi_kg_per_kWh']:
             if df[col].dtype == object: 
+                # Ganti koma desimal (Indonesia) menjadi titik desimal (Python/Pandas)
                 df[col] = df[col].astype(str).str.replace(',', '.', regex=True)
+                # Hapus unit (jika ada)
                 df[col] = df[col].astype(str).str.replace(' kWh/kWp', '', regex=False) 
             
-            df[col] = pd.to_numeric(col, errors='coerce') #BUG FIX: Pastikan col diganti dengan df[col]
+            # Perbaikan fatal: Konversi ke numerik
             df[col] = pd.to_numeric(df[col], errors='coerce') 
 
+        # Hapus baris yang mengandung data non-angka setelah konversi
         df.dropna(inplace=True) 
+        
         if df.empty:
             st.error("Data tidak valid. Pastikan kolom data Anda terisi angka.")
         return df
@@ -125,7 +135,7 @@ with col_input3:
     st.markdown(f"Kapasitas Total PV Anda: **{kapasitas_pv_kwp:.2f} kWp**")
 
 
-# --- BAGIAN 2: PROSES ALGORITMA (Perbaikan Payback Period) ---
+# --- BAGIAN 2: PROSES ALGORITMA ---
 
 # A. Lookup Data Spesifik Lokasi
 data_lokasi = data_solar[data_solar['Provinsi'] == provinsi_pilihan].iloc[0]
@@ -145,7 +155,7 @@ skor_kemandirian = min(skor_kemandirian, 100)
 tagihan_baru = tagihan_bulanan - penghematan_rp
 if tagihan_baru < 0: tagihan_baru = 0
 
-# D. Hitung Output Kritis Jangka Panjang (Payback Fix)
+# D. Hitung Output Kritis Jangka Panjang (Payback Fix - Logika Perulangan yang Diperbaiki)
 biaya_instalasi_pv = kapasitas_pv_wp * BIAYA_AWAL_PV_PER_Wp
 biaya_kumulatif_tanpa_pv = []
 biaya_kumulatif_dengan_pv = []
@@ -159,26 +169,23 @@ total_biaya_dengan_pv = biaya_instalasi_pv
 payback_tahun = TAHUN_ANALISIS + 1 
 
 for tahun in range(1, TAHUN_ANALISIS + 1):
-    # Kenaikan Tarif dihitung SEBELUM akumulasi (Efek inflasi terjadi di awal tahun)
+    # Kenaikan Tarif Bulanan (Dikenakan di awal tahun berikutnya)
     tagihan_bulanan_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
     tagihan_baru_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
 
     # 1. Update total biaya kumulatif
     total_biaya_tanpa_pv += tagihan_bulanan_saat_ini * 12
-    total_biaya_dengan_pv += tagihan_baru_saat_ini * 12 # Biaya dengan PV termasuk biaya instalasi awal
+    total_biaya_dengan_pv += tagihan_baru_saat_ini * 12
 
     biaya_kumulatif_tanpa_pv.append(total_biaya_tanpa_pv)
     biaya_kumulatif_dengan_pv.append(total_biaya_dengan_pv)
 
-    # 2. Cek Payback (FIX UTAMA: total_biaya_dengan_pv sudah termasuk biaya instalasi)
-    # Payback tercapai jika total biaya DENGAN PV (termasuk investasi) <= total biaya TANPA PV
+    # 2. Cek Payback: Payback tercapai jika total biaya DENGAN PV (termasuk investasi awal) 
+    # lebih kecil atau sama dengan total biaya TANPA PV.
+    # Kondisi 'payback_tahun > TAHUN_ANALISIS' memastikan kita hanya mencatat tahun pertama Payback.
     if total_biaya_dengan_pv <= total_biaya_tanpa_pv and payback_tahun > TAHUN_ANALISIS:
         payback_tahun = tahun
     
-    # KESIMPULAN FIX: Perulangan dan kondisi pengecekan payback telah disederhanakan
-    # dan dipastikan menggunakan nilai kumulatif yang sudah benar.
-
-# Hitungan Emisi Total Jangka Panjang untuk Tampilan
 emisi_total_ton = emisi_dicegah_total * 12 * TAHUN_ANALISIS / 1000 
 df_proyeksi = pd.DataFrame({
     'Tahun': range(1, TAHUN_ANALISIS + 1),
@@ -239,7 +246,7 @@ st.write("")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📉 Analisis Biaya Bulanan", "📈 Proyeksi Jangka Panjang", "🌍 Analisis Lingkungan (Emisi)", "ℹ️ Detail Teknis"])
 
-# GRAFIK 1: Analisis Biaya Bulanan (PLOTLY BAR CHART BARU)
+# GRAFIK 1: Analisis Biaya Bulanan (PLOTLY BAR CHART)
 with tab1:
     st.subheader("Komparasi Tagihan Listrik Bulanan")
     
@@ -249,29 +256,26 @@ with tab1:
         'Teks': [format_rupiah(tagihan_bulanan), format_rupiah(tagihan_baru)]
     })
     
-    # Menggunakan Plotly Express (Interaktif dan Modern)
     fig_bar = px.bar(
         data_biaya, 
         x='Kategori', 
         y='Rupiah', 
-        text='Teks', # Menampilkan nilai rupiah di atas bar
+        text='Teks', 
         color='Kategori',
         color_discrete_map={'Tagihan Awal': '#34495e', 'Tagihan Akhir': '#2ecc71'},
         title='Perbandingan Tagihan Listrik: Sebelum vs Sesudah PV'
     )
     
-    # Customisasi Teks (Menghapus Judul Y dan X)
     fig_bar.update_layout(
         yaxis_title="", 
         xaxis_title="", 
         showlegend=False
     )
     
-    # Menambahkan anotasi Penghematan (Manual, karena Plotly tidak memiliki fungsi penghematan otomatis)
     if penghematan_rp > 0 and tagihan_baru < tagihan_bulanan:
         y_pos_annotasi = (tagihan_bulanan + tagihan_baru) / 2
         fig_bar.add_annotation(
-            x=0.5, y=y_pos_annotasi, # Di tengah antara kedua bar
+            x=0.5, y=y_pos_annotasi, 
             text=f"Hemat: {format_rupiah(penghematan_rp)}",
             showarrow=False,
             font=dict(size=14, color="black"),
@@ -288,7 +292,6 @@ with tab1:
 with tab2:
     st.subheader(f"Proyeksi Biaya Listrik Kumulatif Selama {TAHUN_ANALISIS} Tahun")
 
-    # Siapkan data untuk Plotly Line Chart
     df_plot_longterm = df_proyeksi.melt('Tahun', var_name='Skenario', value_name='Total Biaya Kumulatif')
 
     fig_proj = px.line(
@@ -301,7 +304,6 @@ with tab2:
         markers=True
     )
     
-    # Customisasi format Y-axis menjadi Rupiah
     fig_proj.update_layout(
         yaxis=dict(
             tickformat=",.0f",
@@ -309,7 +311,6 @@ with tab2:
         )
     )
 
-    # Menandai Titik Payback (Interaktif Plotly)
     if payback_tahun <= TAHUN_ANALISIS:
         payback_cost = df_proyeksi[df_proyeksi['Tahun'] == payback_tahun]['Dengan PV'].iloc[0]
         
