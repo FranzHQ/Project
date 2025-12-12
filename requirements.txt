@@ -1,10 +1,4 @@
-<<<<<<< HEAD
 streamlit
-pandas
 matplotlib
-=======
-streamlit
 pandas
-matplotlib
->>>>>>> 0e527430d4bc0d361b7552a0fc23c8fa75fc605a
 numpy
