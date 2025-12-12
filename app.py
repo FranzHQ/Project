@@ -1,22 +1,21 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Dec 12 09:19:36 2025
+
+@author: acer
+"""
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-
-# --- PERBAIKAN STABILITAS MATPLOTLIB (FIX PENTING UNTUK CLOUD) ---
-# Memaksa Matplotlib menggunakan backend non-interaktif
-import matplotlib 
-matplotlib.use('Agg') 
-# -------------------------------------------------------------------
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Eco-Cost Analyzer", layout="wide")
 
 # --- KONSTANTA PROYEK ---
 TARIF_PLN = 1400  # Rupiah per kWh (Tarif non-subsidi acuan)
-FILE_DATA = 'produksi_emisi_provinsi.csv' # Pastikan nama file ini sudah benar
-WP_CHOICES = [300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000] # Pilihan Wp umum
-MIN_PV_MODULES = 1 # Jumlah minimum modul PV
+FILE_DATA = 'produksi_emisi_provinsi.csv' # Nama file CSV Anda
 
 # --- FUNGSI LOAD DATA (KODE ROBUST) ---
 @st.cache_data
@@ -30,19 +29,13 @@ def load_data(file_path):
         if len(df.columns) <= 2:
             df = pd.read_csv(file_path, delimiter=';')
 
-        # Koreksi nama kolom yang diambil dari referensi file CSV:
-        # Jika kolom pertama adalah 'No', hapus
-        if df.columns[0].lower() in ['no', 'no.']:
-            df = df.iloc[:, 1:] 
-            
-        # Penamaan ulang kolom yang tersisa (sesuai urutan di file data)
+        # Penamaan ulang kolom
         df.columns = ['Provinsi', 'Produksi_Harian_kWh', 'Faktor_Emisi_kg_per_kWh']
         
         # 3. KOREKSI FORMAT ANGKA (Mengubah koma desimal ke titik desimal)
         for col in ['Produksi_Harian_kWh', 'Faktor_Emisi_kg_per_kWh']:
             if df[col].dtype == object: 
                 df[col] = df[col].astype(str).str.replace(',', '.', regex=True)
-                df[col] = df[col].astype(str).str.replace(' kWh/kWp', '', regex=False) # Hapus unit jika ada
             
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -69,25 +62,22 @@ if data_solar.empty:
 
 
 # --- BAGIAN HEADER & JUDUL ---
-st.title("☀️ Analisis Penghematan Biaya dan Pengurangan Emisi Ketika Menggunakan PV Rumahan")
+st.title("☀️ Analisis Penghematan Biaya dan Penekanan Emisi Ketika Menggunakan PV Rumahan")
 st.markdown("""
 Aplikasi ini membantu Anda menghitung potensi **penghematan biaya listrik (Rp)** dan **dampak lingkungan (emisi CO2)**
 dengan beralih ke energi surya mandiri, disesuaikan dengan **lokasi provinsi** dan **konsumsi listrik** Anda.
-Ini ditujukan agar **mudah dipahami** oleh siapa pun, termasuk non-teknis.
 """)
 st.divider()
 
 # --- BAGIAN 1: INPUT USER (Menggunakan Session State untuk Interaktivitas) ---
 
-# Inisialisasi Session State 
+# Inisialisasi Session State (untuk memastikan nilai default terbaca)
 if 'tagihan_bulanan' not in st.session_state:
     st.session_state['tagihan_bulanan'] = 500000
 
-if 'pv_module_watt' not in st.session_state:
-    st.session_state['pv_module_watt'] = 550 # Default 550 Wp
+if 'kapasitas_pv' not in st.session_state:
+    st.session_state['kapasitas_pv'] = 2.0
 
-if 'pv_module_count' not in st.session_state:
-    st.session_state['pv_module_count'] = 4 # Default 4 modul
 
 st.subheader("⚙️ Data Input dan Instalasi")
 col_input1, col_input2, col_input3 = st.columns(3)
@@ -107,33 +97,23 @@ with col_input2:
         min_value=10000, 
         value=st.session_state['tagihan_bulanan'], 
         step=50000,
-        key='tagihan_bulanan' 
+        key='tagihan_bulanan' # Nilai input terikat ke session state
     )
+    # Ambil nilai yang sudah diupdate dari session state
     tagihan_bulanan = st.session_state['tagihan_bulanan']
 
 with col_input3:
-    # INPUT 3a: Pilihan Wp Modul PV
-    wp_pilihan = st.selectbox(
-        "Pilih Kapasitas 1 Modul PV (Watt Peak/Wp):",
-        WP_CHOICES,
-        index=WP_CHOICES.index(550), # Default ke 550 Wp
-        key='pv_module_watt'
+    # INPUT 3: Kapasitas PV (kWp)
+    st.slider(
+        "Kapasitas Panel Surya yang Dipasang (kWp):", 
+        1.0, 
+        10.0, 
+        value=st.session_state['kapasitas_pv'], 
+        step=0.5,
+        key='kapasitas_pv' # Nilai input terikat ke session state
     )
-    
-    # INPUT 3b: Jumlah Modul PV
-    jumlah_modul = st.number_input(
-        "Jumlah Modul PV yang Dipasang:",
-        min_value=MIN_PV_MODULES,
-        value=st.session_state['pv_module_count'],
-        step=1,
-        key='pv_module_count'
-    )
-    
-    # Hitung Kapasitas PV (kWp) total
-    kapasitas_pv_wp = wp_pilihan * jumlah_modul
-    kapasitas_pv_kwp = kapasitas_pv_wp / 1000.0 # Konversi Wp ke kWp
-    
-    st.markdown(f"Kapasitas Total PV Anda: **{kapasitas_pv_kwp:.2f} kWp**")
+    # Ambil nilai yang sudah diupdate dari session state
+    kapasitas_pv = st.session_state['kapasitas_pv']
 
 
 # --- BAGIAN 2: PROSES ALGORITMA ---
@@ -145,8 +125,7 @@ faktor_emisi_lokal = data_lokasi['Faktor_Emisi_kg_per_kWh']
 
 # B. Perhitungan Konsumsi & Produksi
 konsumsi_kwh = tagihan_bulanan / TARIF_PLN
-# Gunakan kapasitas total kWp yang baru dihitung
-produksi_pv_harian = radiasi_harian * kapasitas_pv_kwp 
+produksi_pv_harian = radiasi_harian * kapasitas_pv
 produksi_pv_bulanan = produksi_pv_harian * 30
 
 # C. Hitung Output Kritis
@@ -164,7 +143,7 @@ skor_kemandirian = min(skor_kemandirian, 100)
 tagihan_baru = tagihan_bulanan - penghematan_rp
 if tagihan_baru < 0: tagihan_baru = 0
 
-# E. VARIABEL KHUSUS UNTUK GRAFIK DONUT 
+# E. VARIABEL KHUSUS UNTUK GRAFIK DONUT (Fix Negative Value Error)
 emisi_awal_total = konsumsi_kwh * faktor_emisi_lokal 
 emisi_dicegah_grafik = min(emisi_dicegah_total, emisi_awal_total) 
 emisi_tersisa_pln = emisi_awal_total - emisi_dicegah_grafik
@@ -175,7 +154,7 @@ emisi_tersisa_pln = emisi_awal_total - emisi_dicegah_grafik
 st.divider()
 st.header(f"📊 Hasil Analisis Dampak untuk {provinsi_pilihan}")
 
-# --- 3 METRIK UTAMA (Scorecards) ---
+# --- 3 METRIK UTAMA (Scorecards - Harus dijamin terupdate) ---
 m1, m2, m3 = st.columns(3)
 
 # 1. HEMAT BIAYA
@@ -192,7 +171,7 @@ with m1:
 # 2. EMISI DICEGAH
 with m2:
     emisi_tampil = emisi_dicegah_total
-    pohon_setara = (emisi_tampil * 12) / 22 # Estimasi 1 pohon dewasa menyerap 22kg CO2/tahun
+    pohon_setara = (emisi_tampil * 12) / 22 
     
     st.metric(
         "🌱 Emisi CO₂ Dicegah (kg/Bulan)", 
@@ -212,104 +191,80 @@ with m3:
 
 st.write("") 
 
-# --- BAGIAN 4: VISUALISASI GRAFIK (Untuk Non-Teknis) ---
+# --- BAGIAN 4: VISUALISASI GRAFIK (Perbaikan Keterbacaan) ---
 
 tab1, tab2, tab3 = st.tabs(["📉 Analisis Biaya & Kemandirian", "🌍 Analisis Lingkungan (Emisi)", "ℹ️ Detail Teknis"])
 
 # GRAFIK 1: Analisis Biaya dan Kemandirian (Stacked Bar Chart)
 with tab1:
-    st.subheader("Komparasi Struktur Biaya Listrik Bulanan")
+    st.subheader("Komparasi Biaya Listrik Bulanan")
+    
     
     data_biaya = pd.DataFrame({
-        'Kategori': ['Tagihan Awal', 'Tagihan Akhir (Dengan PV)'],
+        'Kategori': ['Tagihan Awal', 'Tagihan Akhir (Dampak PV)'],
         'Dibayar ke PLN': [tagihan_bulanan, tagihan_baru],
         'Disuplai PV': [0, penghematan_rp]
     })
     
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(8, 5))
     
-    # Stacked Bar
-    bar_pln = ax.bar(data_biaya['Kategori'], data_biaya['Dibayar ke PLN'], color=['#34495e', '#e74c3c'], label='Dibayar ke PLN')
-    bar_pv = ax.bar(data_biaya['Kategori'][1], data_biaya['Disuplai PV'][1], bottom=data_biaya['Dibayar ke PLN'][1], color='#2ecc71', label='Disuplai PV (Penghematan)')
+    # Bar Tagihan Awal
+    bar_awal = ax.bar(data_biaya['Kategori'][0], data_biaya['Dibayar ke PLN'][0], color='#cccccc', label='Total Biaya Awal')
     
-    # Menambahkan Label Angka di Atas Bar
-    def format_rupiah(x):
-        if x >= 1e6:
-            return f"Rp {x/1e6:,.1f} Jt"
-        return f"Rp {x:,.0f}"
-        
-    ax.bar_label(bar_pln[0], labels=[format_rupiah(tagihan_bulanan)], padding=5)
+    # Stacked Bar Tagihan Akhir
+    bar_pln = ax.bar(data_biaya['Kategori'][1], data_biaya['Dibayar ke PLN'][1], color='#e74c3c', label='Masih Dibayar (PLN)')
+    bar_pv = ax.bar(data_biaya['Kategori'][1], data_biaya['Disuplai PV'][1], bottom=data_biaya['Dibayar ke PLN'][1], color='#2ecc71', label='Disuplai PV (Hemat)')
     
+    # Menambahkan Label Angka di Atas Bar (Agar mudah dibaca orang awam)
+    ax.bar_label(bar_awal, fmt='Rp %.0f', padding=5)
     total_akhir = tagihan_baru + penghematan_rp
-    ax.text(data_biaya['Kategori'][1], total_akhir, format_rupiah(total_akhir), 
-            ha='center', va='bottom', fontsize=10, fontweight='bold', color='black')
+    ax.text(data_biaya['Kategori'][1], total_akhir, f'Rp {total_akhir:,.0f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
     
     # Setting
-    ax.set_title('Struktur Biaya Listrik Bulanan (Perbandingan)', fontsize=14, pad=15)
-    ax.set_ylabel('Total Rupiah', fontsize=12)
+    ax.set_title('Perbandingan Struktur Biaya Listrik (Rp)', fontsize=14)
+    ax.set_ylabel('Rupiah (Rp)', fontsize=12)
     ax.ticklabel_format(style='plain', axis='y') 
-    plt.yticks([]) # Sembunyikan tick y-axis agar fokus pada label di atas bar
-    
-    plt.legend(loc='upper left', bbox_to_anchor=(0.0, 1.0))
-    plt.grid(axis='y', linestyle='--', alpha=0.3)
+    plt.legend(loc='upper left')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
     
     st.pyplot(fig)
-    plt.close(fig) # FIX: Tutup figure Matplotlib
-    
-    st.markdown(f"**Tingkat Kemandirian Energi** dari PV Anda: **{skor_kemandirian:.1f}%**")
     st.progress(int(skor_kemandirian))
-    
+    st.caption(f"Skor Kemandirian Energi Anda adalah **{skor_kemandirian:.1f}%**.")
 
 # GRAFIK 2: Analisis Emisi (Donut Chart)
 with tab2:
-    st.subheader("Porsi Pengurangan Jejak Karbon (CO₂)")
+    st.subheader("Porsi Pengurangan Jejak Karbon")
     
-    labels_donut = ['Emisi Dicegah (Oleh PV)', 'Emisi Tersisa (Dari PLN)']
+    
+    labels_donut = ['Emisi yang Dicegah', 'Emisi yang Tersisa']
     sizes_donut = [emisi_dicegah_grafik, emisi_tersisa_pln] 
-    
-    # Jika salah satu porsi 0, gunakan 100% untuk yang lain agar grafik tidak kosong
-    if emisi_dicegah_grafik == 0 and emisi_tersisa_pln == 0:
-        sizes_donut = [0, 1]
-    
     colors_donut = ['#3498db', '#f1c40f']
 
     fig2, ax2 = plt.subplots(figsize=(6, 6))
     
-    # Custom autopct function untuk menampilkan % dan kg
-    def func_autopct(pct):
-        val = pct * emisi_awal_total / 100
-        if pct > 5: # Hanya tampilkan label jika porsi cukup besar
-            return f'{pct:.1f}%\n({val:.1f} kg)'
-        return ''
-        
+    # Menampilkan Persen dan Kilogram di label
     wedges, texts, autotexts = ax2.pie(
         sizes_donut, 
-        labels=labels_donut if emisi_awal_total > 0 else None, 
+        labels=labels_donut, 
         colors=colors_donut, 
-        autopct=func_autopct,
+        autopct=lambda p: '{:.1f}%\n({:.1f} kg)'.format(p, p * emisi_awal_total / 100) if p > 0 else '', # Hanya tampilkan jika porsi > 0
         startangle=90, 
         pctdistance=0.75, 
-        wedgeprops=dict(width=0.3) # Membuatnya menjadi Donut Chart
+        wedgeprops=dict(width=0.4)
     )
     
     # Draw circle for donut effect
     centre_circle = plt.Circle((0,0),0.60,fc='white')
     fig2.gca().add_artist(centre_circle)
-    ax2.axis('equal') # Memastikan Pie Chart berbentuk lingkaran
-    
+
     ax2.set_title(f'Total Jejak Karbon Awal: {emisi_awal_total:.1f} kg CO₂/Bulan', fontsize=14)
     st.pyplot(fig2)
-    plt.close(fig2) # FIX: Tutup figure Matplotlib
     
     st.info(f"Dengan PV, Anda berhasil mengurangi emisi sebesar **{emisi_dicegah_grafik:.1f} kg CO₂** dari konsumsi rumah Anda.")
 
 # TAB 3: Detail Teknis
 with tab3:
     st.subheader("Data Teknis dan Angka Kunci")
-    
-    st.markdown(f"**Tarif Dasar Listrik (TDL) Acuan:** Rp {TARIF_PLN:,.0f} / kWh")
-    st.markdown(f"**Kapasitas PV Total Anda:** {kapasitas_pv_kwp:.2f} kWp")
-    
     st.table(pd.DataFrame({
         "Deskripsi": [
             "Konsumsi Energi Total Rumah",
