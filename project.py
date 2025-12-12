@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 st.set_page_config(page_title="Eco-Cost Analyzer", layout="wide")
 
 # --- KONSTANTA PROYEK ---
-TARIF_PLN = 1400  # Rupiah per kWh (Tarif non-subsidi acuan)
+TARIF_PLN = 1400 # Rupiah per kWh (Tarif non-subsidi acuan)
 FILE_DATA = 'produksi_emisi_provinsi.csv' # Pastikan nama file ini sudah benar
 WP_CHOICES = [300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000] # Pilihan Wp umum
 MIN_PV_MODULES = 1 # Jumlah minimum modul PV
@@ -238,11 +238,21 @@ with tab1:
             return f"Rp {x/1e6:,.1f} Jt"
         return f"Rp {x:,.0f}"
         
-    ax.bar_label(bar_pln[0], labels=[format_rupiah(tagihan_bulanan)], padding=5)
+    # --- PERBAIKAN ATTRIBUTE ERROR DIMULAI DI SINI ---
+    # Kita menggunakan ax.bar_label pada objek container bar_pln,
+    # dan menyediakan label untuk kedua bar di dalamnya.
+    
+    # Label untuk Tagihan Awal dan Tagihan Akhir (bagian PLN)
+    # Gunakan bar_pln secara keseluruhan (container) dan pasangkan dengan kedua label Rupiah
+    ax.bar_label(bar_pln, 
+                 labels=[format_rupiah(data_biaya['Dibayar ke PLN'][0]), format_rupiah(data_biaya['Dibayar ke PLN'][1])], 
+                 padding=5)
     
     total_akhir = tagihan_baru + penghematan_rp
     ax.text(data_biaya['Kategori'][1], total_akhir, format_rupiah(total_akhir), 
             ha='center', va='bottom', fontsize=10, fontweight='bold', color='black')
+    
+    # --- PERBAIKAN ATTRIBUTE ERROR SELESAI DI SINI ---
     
     # Setting
     ax.set_title('Struktur Biaya Listrik Bulanan (Perbandingan)', fontsize=14, pad=15)
@@ -254,7 +264,7 @@ with tab1:
     plt.grid(axis='y', linestyle='--', alpha=0.3)
     
     st.pyplot(fig)
-    plt.close(fig) # FIX: Tutup figure Matplotlib
+    plt.close('all') # FIX: Ganti plt.close(fig) menjadi plt.close('all') untuk stabilitas ekstra
     
     st.markdown(f"**Tingkat Kemandirian Energi** dari PV Anda: **{skor_kemandirian:.1f}%**")
     st.progress(int(skor_kemandirian))
@@ -299,7 +309,7 @@ with tab2:
     
     ax2.set_title(f'Total Jejak Karbon Awal: {emisi_awal_total:.1f} kg CO₂/Bulan', fontsize=14)
     st.pyplot(fig2)
-    plt.close(fig2) # FIX: Tutup figure Matplotlib
+    plt.close('all') # FIX: Ganti plt.close(fig2) menjadi plt.close('all') untuk stabilitas ekstra
     
     st.info(f"Dengan PV, Anda berhasil mengurangi emisi sebesar **{emisi_dicegah_grafik:.1f} kg CO₂** dari konsumsi rumah Anda.")
 
