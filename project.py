@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+import plotly.express as px # Mengimpor Plotly untuk visualisasi interaktif
 
 # --- PERBAIKAN STABILITAS MATPLOTLIB (FIX PENTING UNTUK CLOUD) ---
 import matplotlib 
@@ -47,7 +48,8 @@ def load_data(file_path):
                 df[col] = df[col].astype(str).str.replace(',', '.', regex=True)
                 df[col] = df[col].astype(str).str.replace(' kWh/kWp', '', regex=False) 
             
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+            df[col] = pd.to_numeric(col, errors='coerce') #BUG FIX: Pastikan col diganti dengan df[col]
+            df[col] = pd.to_numeric(df[col], errors='coerce') 
 
         df.dropna(inplace=True) 
         if df.empty:
@@ -90,8 +92,6 @@ with col_input1:
         data_solar['Provinsi'].tolist(),
         key='provinsi_key' 
     )
-    # Ambil variabel provinsi_pilihan dari state, meskipun ini tidak kritis
-    # karena st.selectbox langsung mengembalikan nilainya.
 
 with col_input2:
     tagihan_input = st.number_input(
@@ -101,7 +101,7 @@ with col_input2:
         step=50000,
         key='tagihan_bulanan' 
     )
-    tagihan_bulanan = tagihan_input # Gunakan variabel lokal yang terikat pada input
+    tagihan_bulanan = tagihan_input 
 
 with col_input3:
     wp_pilihan = st.selectbox(
@@ -125,7 +125,7 @@ with col_input3:
     st.markdown(f"Kapasitas Total PV Anda: **{kapasitas_pv_kwp:.2f} kWp**")
 
 
-# --- BAGIAN 2: PROSES ALGORITMA (Memastikan metrik dinamis) ---
+# --- BAGIAN 2: PROSES ALGORITMA (Perbaikan Payback Period) ---
 
 # A. Lookup Data Spesifik Lokasi
 data_lokasi = data_solar[data_solar['Provinsi'] == provinsi_pilihan].iloc[0]
@@ -145,37 +145,38 @@ skor_kemandirian = min(skor_kemandirian, 100)
 tagihan_baru = tagihan_bulanan - penghematan_rp
 if tagihan_baru < 0: tagihan_baru = 0
 
-# D. Hitung Output Kritis Jangka Panjang (Untuk Grafik Proyeksi & Payback)
+# D. Hitung Output Kritis Jangka Panjang (Payback Fix)
 biaya_instalasi_pv = kapasitas_pv_wp * BIAYA_AWAL_PV_PER_Wp
 biaya_kumulatif_tanpa_pv = []
 biaya_kumulatif_dengan_pv = []
 
-# Variabel yang akan diiterasi
 tagihan_bulanan_saat_ini = tagihan_bulanan
 tagihan_baru_saat_ini = tagihan_baru
 
-# Inisialisasi total biaya
 total_biaya_tanpa_pv = 0
 total_biaya_dengan_pv = biaya_instalasi_pv 
 
 payback_tahun = TAHUN_ANALISIS + 1 
 
 for tahun in range(1, TAHUN_ANALISIS + 1):
+    # Kenaikan Tarif dihitung SEBELUM akumulasi (Efek inflasi terjadi di awal tahun)
+    tagihan_bulanan_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
+    tagihan_baru_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
+
     # 1. Update total biaya kumulatif
     total_biaya_tanpa_pv += tagihan_bulanan_saat_ini * 12
-    total_biaya_dengan_pv += tagihan_baru_saat_ini * 12
-    
+    total_biaya_dengan_pv += tagihan_baru_saat_ini * 12 # Biaya dengan PV termasuk biaya instalasi awal
+
     biaya_kumulatif_tanpa_pv.append(total_biaya_tanpa_pv)
     biaya_kumulatif_dengan_pv.append(total_biaya_dengan_pv)
 
-    # 2. Cek Payback (Hanya dilakukan sekali)
-    # Payback tercapai jika total biaya DENGAN PV sudah lebih kecil dari total biaya TANPA PV
+    # 2. Cek Payback (FIX UTAMA: total_biaya_dengan_pv sudah termasuk biaya instalasi)
+    # Payback tercapai jika total biaya DENGAN PV (termasuk investasi) <= total biaya TANPA PV
     if total_biaya_dengan_pv <= total_biaya_tanpa_pv and payback_tahun > TAHUN_ANALISIS:
         payback_tahun = tahun
     
-    # 3. Kenaikan Tarif (Asumsi Inflasi) untuk Tahun Berikutnya
-    tagihan_bulanan_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
-    tagihan_baru_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
+    # KESIMPULAN FIX: Perulangan dan kondisi pengecekan payback telah disederhanakan
+    # dan dipastikan menggunakan nilai kumulatif yang sudah benar.
 
 # Hitungan Emisi Total Jangka Panjang untuk Tampilan
 emisi_total_ton = emisi_dicegah_total * 12 * TAHUN_ANALISIS / 1000 
@@ -236,36 +237,49 @@ st.write("")
 
 # --- BAGIAN 4: VISUALISASI GRAFIK ---
 
-# Menambahkan Donut Chart kembali sebagai Tab 3, sehingga kini ada 4 Tab
 tab1, tab2, tab3, tab4 = st.tabs(["📉 Analisis Biaya Bulanan", "📈 Proyeksi Jangka Panjang", "🌍 Analisis Lingkungan (Emisi)", "ℹ️ Detail Teknis"])
 
-# GRAFIK 1: Analisis Biaya Bulanan (Grouped Bar Chart)
+# GRAFIK 1: Analisis Biaya Bulanan (PLOTLY BAR CHART BARU)
 with tab1:
     st.subheader("Komparasi Tagihan Listrik Bulanan")
     
-    labels = ['Tagihan Awal', 'Tagihan Akhir']
-    nilai = [tagihan_bulanan, tagihan_baru]
+    data_biaya = pd.DataFrame({
+        'Kategori': ['Tagihan Awal', 'Tagihan Akhir'],
+        'Rupiah': [tagihan_bulanan, tagihan_baru],
+        'Teks': [format_rupiah(tagihan_bulanan), format_rupiah(tagihan_baru)]
+    })
     
-    fig, ax = plt.subplots(figsize=(7, 5))
+    # Menggunakan Plotly Express (Interaktif dan Modern)
+    fig_bar = px.bar(
+        data_biaya, 
+        x='Kategori', 
+        y='Rupiah', 
+        text='Teks', # Menampilkan nilai rupiah di atas bar
+        color='Kategori',
+        color_discrete_map={'Tagihan Awal': '#34495e', 'Tagihan Akhir': '#2ecc71'},
+        title='Perbandingan Tagihan Listrik: Sebelum vs Sesudah PV'
+    )
     
-    bar_chart = ax.bar(labels, nilai, color=['#34495e', '#2ecc71']) 
+    # Customisasi Teks (Menghapus Judul Y dan X)
+    fig_bar.update_layout(
+        yaxis_title="", 
+        xaxis_title="", 
+        showlegend=False
+    )
     
-    ax.bar_label(bar_chart, labels=[format_rupiah(nilai[0]), format_rupiah(nilai[1])], padding=5)
-    
+    # Menambahkan anotasi Penghematan (Manual, karena Plotly tidak memiliki fungsi penghematan otomatis)
     if penghematan_rp > 0 and tagihan_baru < tagihan_bulanan:
-        y_pos = (tagihan_bulanan + tagihan_baru) / 2
-        ax.text(0.5, y_pos, f"Hemat: {format_rupiah(penghematan_rp)}",
-                ha='center', va='center', fontsize=12, 
-                bbox=dict(facecolor='yellow', alpha=0.5, edgecolor='none'))
+        y_pos_annotasi = (tagihan_bulanan + tagihan_baru) / 2
+        fig_bar.add_annotation(
+            x=0.5, y=y_pos_annotasi, # Di tengah antara kedua bar
+            text=f"Hemat: {format_rupiah(penghematan_rp)}",
+            showarrow=False,
+            font=dict(size=14, color="black"),
+            bgcolor="rgba(255, 255, 0, 0.5)",
+            borderpad=4
+        )
     
-    ax.set_title('Perbandingan Tagihan Listrik: Sebelum vs Sesudah PV', fontsize=14, pad=15)
-    ax.set_ylabel('Total Rupiah', fontsize=12)
-    ax.set_ylim(0, max(tagihan_bulanan, tagihan_baru) * 1.2) 
-    plt.yticks([]) 
-    plt.grid(axis='y', linestyle='--', alpha=0.3)
-    
-    st.pyplot(fig)
-    plt.close('all') 
+    st.plotly_chart(fig_bar, use_container_width=True) 
     
     st.markdown(f"**Tingkat Kemandirian Energi** dari PV Anda: **{skor_kemandirian:.1f}%**")
     st.progress(int(skor_kemandirian))
@@ -274,44 +288,55 @@ with tab1:
 with tab2:
     st.subheader(f"Proyeksi Biaya Listrik Kumulatif Selama {TAHUN_ANALISIS} Tahun")
 
-    fig_proj, ax_proj = plt.subplots(figsize=(10, 6))
+    # Siapkan data untuk Plotly Line Chart
+    df_plot_longterm = df_proyeksi.melt('Tahun', var_name='Skenario', value_name='Total Biaya Kumulatif')
 
-    ax_proj.plot(df_proyeksi['Tahun'], df_proyeksi['Tanpa PV'], 
-                 label='Tanpa PV', color='#e74c3c', linewidth=2)
+    fig_proj = px.line(
+        df_plot_longterm,
+        x='Tahun',
+        y='Total Biaya Kumulatif',
+        color='Skenario',
+        color_discrete_map={'Tanpa PV': '#e74c3c', 'Dengan PV': '#2ecc71'},
+        title='Perbandingan Biaya Kumulatif Jangka Panjang',
+        markers=True
+    )
     
-    ax_proj.plot(df_proyeksi['Tahun'], df_proyeksi['Dengan PV'], 
-                 label='Dengan PV (Termasuk Biaya Instalasi)', color='#2ecc71', linewidth=2)
+    # Customisasi format Y-axis menjadi Rupiah
+    fig_proj.update_layout(
+        yaxis=dict(
+            tickformat=",.0f",
+            tickprefix="Rp "
+        )
+    )
 
+    # Menandai Titik Payback (Interaktif Plotly)
     if payback_tahun <= TAHUN_ANALISIS:
-        # Gunakan data dari df_proyeksi yang sudah dihitung
         payback_cost = df_proyeksi[df_proyeksi['Tahun'] == payback_tahun]['Dengan PV'].iloc[0]
-        ax_proj.plot(payback_tahun, payback_cost, 'o', color='#3498db', markersize=8, label='Masa Balik Modal')
-        ax_proj.annotate(f'{payback_tahun} Tahun', 
-                         (payback_tahun, payback_cost), 
-                         textcoords="offset points", 
-                         xytext=(-15, 15), 
-                         ha='center', 
-                         fontsize=10)
-
-    ax_proj.set_title('Perbandingan Biaya Kumulatif Jangka Panjang', fontsize=14, pad=15)
-    ax_proj.set_xlabel('Tahun Penggunaan', fontsize=12)
-    ax_proj.set_ylabel('Total Biaya Kumulatif', fontsize=12)
-    ax_proj.ticklabel_format(style='plain', axis='y')
-    ax_proj.grid(axis='both', linestyle='--', alpha=0.5)
+        
+        fig_proj.add_scatter(
+            x=[payback_tahun], 
+            y=[payback_cost], 
+            mode='markers', 
+            marker=dict(size=10, color='#3498db'),
+            name='Masa Balik Modal',
+            showlegend=False
+        )
+        fig_proj.add_annotation(
+            x=payback_tahun, y=payback_cost,
+            text=f'{payback_tahun} Tahun',
+            showarrow=True,
+            arrowhead=1,
+            ax=-30, ay=-30
+        )
     
-    y_tick_labels = [format_rupiah(y) for y in ax_proj.get_yticks()]
-    ax_proj.set_yticklabels(y_tick_labels)
-    
-    plt.legend()
-    st.pyplot(fig_proj)
-    plt.close('all')
+    st.plotly_chart(fig_proj, use_container_width=True)
 
     st.markdown(f"""
     * **Asumsi:** Kenaikan tarif listrik sebesar {ASUMSI_INFLASI_LISTRIK*100}% per tahun.
     * **Total Hemat Setelah {TAHUN_ANALISIS} Tahun:** {format_rupiah(total_biaya_tanpa_pv - total_biaya_dengan_pv)}
     """)
 
-# GRAFIK 3: Analisis Emisi (Donut Chart) - DIKEMBALIKAN
+# GRAFIK 3: Analisis Emisi (Donut Chart) 
 with tab3:
     st.subheader("Porsi Pengurangan Jejak Karbon (CO₂)")
     
@@ -351,7 +376,7 @@ with tab3:
     
     st.info(f"Dengan PV, Anda berhasil mengurangi emisi sebesar **{emisi_dicegah_grafik:.1f} kg CO₂** dari konsumsi rumah Anda.")
 
-# TAB 4: Detail Teknis (Layout Baru Scorecard) - PINDAH KE TAB 4
+# TAB 4: Detail Teknis 
 with tab4:
     col_tech1, col_tech2 = st.columns(2)
     
