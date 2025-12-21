@@ -93,8 +93,7 @@ if data_solar.empty:
 
 # --- BAGIAN HEADER & BANNER ---
 # Menambahkan gambar banner agar lebih menarik
-st.image("https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop", height=250, use_column_width=True)
-
+st.image("https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop", use_container_width=True)
 st.title("☀️ Eco-Cost Analyzer: Solusi Energi Surya Rumahan")
 st.markdown("""
 Simulasi cerdas untuk menghitung **penghematan biaya listrik** dan **kontribusi lingkungan** Anda 
