@@ -2,31 +2,86 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go # Library untuk Donut Chart yang lebih bagus
+import plotly.graph_objects as go 
 
-# --- KONFIGURASI HALAMAN ---
+# --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(
     page_title="Eco-Cost Analyzer", 
     layout="wide",
     page_icon="☀️"
 )
 
-# --- KONSTANTA PROYEK ---
+# --- 2. CUSTOM CSS (MODERN UI & FLOATING TITLE) ---
+st.markdown("""
+<style>
+    /* 1. HERO BANNER: Background Gambar di Belakang Judul */
+    .hero-banner {
+        background-image: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072');
+        height: 300px;
+        background-position: center;
+        background-size: cover;
+        border-radius: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin-bottom: 25px;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+    
+    /* Teks Judul dalam Banner (Warna Putih Tetap) */
+    .hero-banner h1 {
+        color: #ffffff !important;
+        font-size: 2.5rem;
+        font-weight: 700;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        margin-bottom: 10px;
+    }
+    
+    /* Teks Sub-judul dalam Banner */
+    .hero-banner p {
+        color: #f0f0f0 !important;
+        font-size: 1.1rem;
+        font-weight: 400;
+        max-width: 800px;
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* 2. CARD STYLING UNTUK METRICS */
+    div[data-testid="stMetric"] {
+        background-color: var(--secondary-background-color);
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    /* 3. INFO BOX WILAYAH */
+    .info-box {
+        padding: 15px;
+        border-radius: 10px;
+        background-color: rgba(33, 150, 243, 0.1);
+        border-left: 5px solid #2196f3;
+        margin-top: 20px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+# --- 3. KONSTANTA PROYEK ---
 TARIF_PLN = 1400 
 FILE_DATA = 'produksi_emisi_provinsi.csv' 
-
-# [PERUBAHAN 1] Batas pilihan Wp hanya sampai 550 sesuai perintah
+# [REQUEST] Batas Wp sampai 550
 WP_CHOICES = [300, 350, 400, 450, 500, 550] 
-
 MIN_PV_MODULES = 1 
-# [PERUBAHAN 2] Batas maksimal modul disiapkan variabelnya
+# [REQUEST] Batas Modul sampai 50
 MAX_PV_MODULES = 50 
-
 TAHUN_ANALISIS = 15 
 ASUMSI_INFLASI_LISTRIK = 0.05 
 BIAYA_AWAL_PV_PER_Wp = 15000 
 
-# --- FUNGSI UTILITY ---
+# --- 4. FUNGSI UTILITY ---
 def format_rupiah(x):
     """Format angka menjadi Rupiah untuk label grafik dan tampilan."""
     if x >= 1e9:
@@ -37,9 +92,6 @@ def format_rupiah(x):
 
 @st.cache_data
 def load_data(file_path):
-    """
-    Memuat data dari CSV dengan penanganan error yang kuat.
-    """
     try:
         df = pd.read_csv(file_path, delimiter=',')
         if len(df.columns) <= 2:
@@ -57,16 +109,11 @@ def load_data(file_path):
             df[col] = pd.to_numeric(df[col], errors='coerce') 
 
         df.dropna(inplace=True) 
-        
         if df.empty:
             st.error("Data tidak valid. Pastikan kolom data Anda terisi angka.")
         return df
-        
-    except FileNotFoundError:
-        st.error(f"File data tidak ditemukan: {file_path}. Pastikan nama file sudah benar.")
-        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Error fatal saat memproses data: {e}. Periksa kembali struktur data Anda.")
+        st.error(f"Error: {e}")
         return pd.DataFrame()
 
 # Panggil fungsi untuk memuat data
@@ -74,19 +121,18 @@ data_solar = load_data(FILE_DATA)
 if data_solar.empty:
     st.stop()
 
-# --- [PERUBAHAN UI] GAMBAR HEADER ---
-# Saya gunakan st.image biasa agar aman dan tidak merusak font
-st.image("https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop", use_container_width=True)
 
-# --- BAGIAN HEADER & JUDUL (TIDAK DIUBAH) ---
-st.title("☀️ Analisis Penghematan Biaya dan Pengurangan Emisi Ketika Menggunakan PV Rumahan")
+# --- 5. HEADER (JUDUL MENGAMBANG DI BACKGROUND) ---
+# Menggunakan HTML khusus agar judul ada di atas gambar background
 st.markdown("""
-Aplikasi ini membantu Anda menghitung potensi **penghematan biaya listrik (Rp)** dan **dampak lingkungan (emisi CO2)**
-dengan beralih ke energi surya mandiri.
-""")
-st.divider()
+    <div class="hero-banner">
+        <h1>☀️ Analisis Penghematan Biaya dan Pengurangan Emisi Ketika Menggunakan PV Rumahan</h1>
+        <p>Aplikasi ini membantu Anda menghitung potensi <b>penghematan biaya listrik (Rp)</b> dan <b>dampak lingkungan (emisi CO2)</b> dengan beralih ke energi surya mandiri.</p>
+    </div>
+""", unsafe_allow_html=True)
 
-# --- BAGIAN 1: INPUT USER ---
+
+# --- 6. BAGIAN INPUT USER ---
 
 if 'tagihan_bulanan' not in st.session_state: st.session_state['tagihan_bulanan'] = 500000
 if 'pv_module_watt' not in st.session_state: st.session_state['pv_module_watt'] = 550
@@ -102,16 +148,18 @@ with col_input1:
         key='provinsi_key' 
     )
     
-    # [PERUBAHAN 3] Menampilkan PV Out & Faktor Emisi (Otomatis muncul sesuai provinsi)
+    # [REQUEST] Tampilkan Info Wilayah (PV Out & Emisi)
     data_lokasi = data_solar[data_solar['Provinsi'] == provinsi_pilihan].iloc[0]
     radiasi_harian = data_lokasi['Produksi_Harian_kWh']
     faktor_emisi_lokal = data_lokasi['Faktor_Emisi_kg_per_kWh']
     
-    st.info(f"""
-    **Info Wilayah {provinsi_pilihan}:**
-    \n☀️ PV Out: **{radiasi_harian}** kWh/kWp
-    \n🏭 Emisi: **{faktor_emisi_lokal}** kg/kWh
-    """)
+    st.markdown(f"""
+    <div class="info-box">
+        <b>Data Wilayah: {provinsi_pilihan}</b><br>
+        ☀️ PV Out: {radiasi_harian} kWh/kWp<br>
+        🏭 Emisi Grid: {faktor_emisi_lokal} kg/kWh
+    </div>
+    """, unsafe_allow_html=True)
 
 with col_input2:
     tagihan_input = st.number_input(
@@ -126,16 +174,15 @@ with col_input2:
 with col_input3:
     wp_pilihan = st.selectbox(
         "Pilih Kapasitas 1 Modul PV (Watt Peak/Wp):",
-        WP_CHOICES,
-        index=WP_CHOICES.index(550), # Default 550
+        WP_CHOICES, # [REQUEST] List cuma sampai 550
+        index=WP_CHOICES.index(550),
         key='pv_module_watt'
     )
     
-    # [PERUBAHAN 4] Batasi jumlah modul max 50
     jumlah_modul = st.number_input(
         "Jumlah Modul PV yang Dipasang:",
         min_value=MIN_PV_MODULES,
-        max_value=MAX_PV_MODULES, # Batas Max 50
+        max_value=MAX_PV_MODULES, # [REQUEST] Max 50
         value=st.session_state['pv_module_count'],
         step=1,
         key='pv_module_count'
@@ -147,10 +194,10 @@ with col_input3:
     st.markdown(f"Kapasitas Total PV Anda: **{kapasitas_pv_kwp:.2f} kWp**")
 
 
-# --- BAGIAN 2: PROSES ALGORITMA (TIDAK DIUBAH LOGIKANYA) ---
+# --- BAGIAN 2: PROSES ALGORITMA (TIDAK DIUBAH - COPY PASTE KODE ASLI) ---
 
-# A. Lookup Data Spesifik Lokasi (Sudah diambil diatas untuk display, pakai ulang variabelnya)
-# radiasi_harian & faktor_emisi_lokal sudah terdefinisi di blok input
+# A. Lookup Data Spesifik Lokasi (Sudah diambil diatas, pakai variabel yang sama)
+# radiasi_harian & faktor_emisi_lokal
 
 # B. Perhitungan Konsumsi & Produksi
 konsumsi_kwh = tagihan_bulanan / TARIF_PLN
@@ -165,7 +212,7 @@ skor_kemandirian = min(skor_kemandirian, 100)
 tagihan_baru = tagihan_bulanan - penghematan_rp
 if tagihan_baru < 0: tagihan_baru = 0
 
-# D. Hitung Output Kritis Jangka Panjang
+# D. Hitung Output Kritis Jangka Panjang (Payback Fix)
 biaya_instalasi_pv = kapasitas_pv_wp * BIAYA_AWAL_PV_PER_Wp
 biaya_kumulatif_tanpa_pv = []
 biaya_kumulatif_dengan_pv = []
@@ -179,15 +226,18 @@ total_biaya_dengan_pv = biaya_instalasi_pv
 payback_tahun = TAHUN_ANALISIS + 1 
 
 for tahun in range(1, TAHUN_ANALISIS + 1):
+    # Kenaikan Tarif Bulanan
     tagihan_bulanan_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
     tagihan_baru_saat_ini *= (1 + ASUMSI_INFLASI_LISTRIK)
 
+    # 1. Update total biaya kumulatif
     total_biaya_tanpa_pv += tagihan_bulanan_saat_ini * 12
     total_biaya_dengan_pv += tagihan_baru_saat_ini * 12
 
     biaya_kumulatif_tanpa_pv.append(total_biaya_tanpa_pv)
     biaya_kumulatif_dengan_pv.append(total_biaya_dengan_pv)
 
+    # 2. Cek Payback
     if total_biaya_dengan_pv <= total_biaya_tanpa_pv and payback_tahun > TAHUN_ANALISIS:
         payback_tahun = tahun
     
@@ -204,7 +254,7 @@ emisi_dicegah_grafik = min(emisi_dicegah_total, emisi_awal_total)
 emisi_tersisa_pln = emisi_awal_total - emisi_dicegah_grafik
 
 
-# --- BAGIAN 3: OUTPUT DASHBOARD METRIC (TIDAK DIUBAH) ---
+# --- BAGIAN 3: OUTPUT DASHBOARD METRIC (Scorecards) ---
 
 st.divider()
 st.header(f"📊 Hasil Analisis Dampak untuk {provinsi_pilihan}")
@@ -266,21 +316,16 @@ with tab1:
         title='Perbandingan Tagihan Listrik: Sebelum vs Sesudah PV'
     )
     
-    fig_bar.update_layout(
-        yaxis_title="", 
-        xaxis_title="", 
-        showlegend=False
-    )
+    fig_bar.update_layout(yaxis_title="", xaxis_title="", showlegend=False)
     
-    # Anotasi Hemat
     if penghematan_rp > 0 and tagihan_baru < tagihan_bulanan:
         y_pos_annotasi = (tagihan_bulanan + tagihan_baru) / 2
         fig_bar.add_annotation(
             x=0.5, y=y_pos_annotasi, 
             text=f"Hemat: {format_rupiah(penghematan_rp)}",
             showarrow=False,
-            font=dict(size=14, color="black"), # Warna font anotasi tetap hitam agar terbaca di bar chart
-            bgcolor="rgba(255, 255, 0, 0.7)",
+            font=dict(size=14, color="black"),
+            bgcolor="rgba(255, 255, 0, 0.8)", # Background kuning supaya terbaca
             borderpad=4
         )
     
@@ -305,23 +350,14 @@ with tab2:
         markers=True
     )
     
-    fig_proj.update_layout(
-        yaxis=dict(
-            tickformat=",.0f",
-            tickprefix="Rp "
-        )
-    )
+    fig_proj.update_layout(yaxis=dict(tickformat=",.0f", tickprefix="Rp "))
 
     if payback_tahun <= TAHUN_ANALISIS:
         payback_cost = df_proyeksi[df_proyeksi['Tahun'] == payback_tahun]['Dengan PV'].iloc[0]
-        
         fig_proj.add_scatter(
-            x=[payback_tahun], 
-            y=[payback_cost], 
-            mode='markers', 
-            marker=dict(size=10, color='#3498db'),
-            name='Masa Balik Modal',
-            showlegend=False
+            x=[payback_tahun], y=[payback_cost], 
+            mode='markers', marker=dict(size=10, color='#3498db'),
+            name='Masa Balik Modal', showlegend=False
         )
     
     st.plotly_chart(fig_proj, use_container_width=True)
@@ -331,45 +367,40 @@ with tab2:
     * **Total Hemat Setelah {TAHUN_ANALISIS} Tahun:** {format_rupiah(total_biaya_tanpa_pv - total_biaya_dengan_pv)}
     """)
 
-# GRAFIK 3: Analisis Emisi (Donut Chart - DIPERBAIKI DENGAN PLOTLY) 
-# [PERUBAHAN 5] Mengganti Matplotlib dengan Plotly Donut Chart (Lebih Bagus & Aman Dark Mode)
+# GRAFIK 3: Analisis Emisi (DONUT CHART - UPGRADE KE PLOTLY)
+# [REQUEST] Donut chart lebih bagus dan tidak eror matplotlib
 with tab3:
     st.subheader("Porsi Pengurangan Jejak Karbon (CO₂)")
     
-    col_donut, col_desc = st.columns([1.5, 1])
+    c_don, c_txt = st.columns([1.5, 1])
     
-    with col_donut:
-        labels = ['Emisi Dicegah (PV)', 'Emisi Sisa (PLN)']
+    with c_don:
+        # Menggunakan Plotly Pie Chart (Donut)
+        labels = ['Dicegah (PV)', 'Sisa (PLN)']
         values = [emisi_dicegah_grafik, emisi_tersisa_pln]
-        colors = ['#2ecc71', '#95a5a6'] # Hijau dan Abu-abu
+        colors = ['#2ecc71', '#bdc3c7']
         
-        # Menggunakan Plotly Graph Objects untuk kontrol penuh Donut Chart
         fig_donut = go.Figure(data=[go.Pie(
             labels=labels, 
             values=values, 
-            hole=.6, # Membuat lubang di tengah (Donut)
+            hole=.6, # Efek Donut
             marker_colors=colors,
-            textinfo='percent',
-            hoverinfo='label+value+percent'
+            hoverinfo="label+value+percent",
+            textinfo='percent'
         )])
         
-        # Menambah teks persentase di tengah lubang donut
+        # Tambah teks di tengah donut
         fig_donut.update_layout(
-            annotations=[dict(text=f'{skor_kemandirian:.0f}%', x=0.5, y=0.5, font_size=20, showarrow=False)],
+            annotations=[dict(text=f"{skor_kemandirian:.0f}%", x=0.5, y=0.5, font_size=20, showarrow=False)],
             showlegend=True,
             legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
         )
-        
         st.plotly_chart(fig_donut, use_container_width=True)
     
-    with col_desc:
-        st.info(f"""
-        **Analisis:**
-        \nDengan sistem PV ini, Anda mencegah emisi sebesar **{emisi_dicegah_grafik:.1f} kg CO₂** per bulan.
-        \nIni setara dengan menanam **{int(emisi_dicegah_grafik/20)} pohon** setiap bulannya.
-        """)
+    with c_txt:
+        st.info(f"Dengan PV, Anda berhasil mengurangi emisi sebesar **{emisi_dicegah_grafik:.1f} kg CO₂** dari konsumsi rumah Anda.")
 
-# TAB 4: Detail Teknis (STRUKTUR SAMA SEPERTI YANG ANDA SUKA)
+# TAB 4: Detail Teknis (DIKEMBALIKAN SESUAI REQUEST)
 with tab4:
     col_tech1, col_tech2 = st.columns(2)
     
