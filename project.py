@@ -369,24 +369,32 @@ with tab2:
     """)
 
 # GRAFIK 3 (BARU): Profil Produksi Energi (Simulasi Musiman)
+
 with tab3:
     st.subheader(f"Estimasi Produksi Energi Bulanan di {provinsi_pilihan}")
-    st.caption("Grafik ini mensimulasikan fluktuasi produksi energi berdasarkan pola musim di Indonesia (Hujan vs Kemarau).")
     
-    # --- LOGIKA SIMULASI MUSIMAN ---
+    # --- 1. LOGIKA ZONASI MUSIM (AGAR LEBIH REALISTIS) ---
+    def get_pola_musim(nama_prov):
+        nama = nama_prov.lower()
+        
+        # ZONA 1: TIPE MONSUN (Jawa, Bali, Nusa Tenggara)
+        if any(x in nama for x in ['jawa', 'jakarta', 'banten', 'yogyakarta', 'bali', 'nusa']):
+            st.caption("ℹ️ Pola Musim: Monsun (Puncak kemarau di pertengahan tahun).")
+            return [0.80, 0.85, 0.90, 0.98, 1.05, 1.10, 1.15, 1.18, 1.12, 1.02, 0.90, 0.85]
+            
+        # ZONA 2: TIPE KHATULISTIWA (Sumatra, Kalimantan, Sulawesi, Papua, dll)
+        else:
+            st.caption("ℹ️ Pola Musim: Khatulistiwa (Cenderung stabil sepanjang tahun).")
+            return [0.95, 0.98, 1.05, 1.02, 0.98, 0.96, 0.98, 1.02, 1.05, 1.02, 0.98, 0.96]
+
+    faktor_musim = get_pola_musim(provinsi_pilihan)
+    
     bulan_list = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
-    
-    # Faktor cuaca (1.0 = rata-rata). 
-    # Logika: Nov-Mar (Musim Hujan -> Faktor < 1), Apr-Okt (Kemarau -> Faktor > 1)
-    faktor_musim = [0.85, 0.88, 0.95, 1.0, 1.05, 1.08, 1.12, 1.15, 1.10, 1.02, 0.90, 0.85]
-    
-    # Jumlah hari dalam sebulan
     days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     
     produksi_bulanan_simulasi = []
     
     for i in range(12):
-        # Rumus: Produksi Harian Rata2 * Jumlah Hari * Faktor Cuaca
         prod = produksi_pv_harian * days_in_month[i] * faktor_musim[i]
         produksi_bulanan_simulasi.append(prod)
         
@@ -395,44 +403,37 @@ with tab3:
         'Produksi (kWh)': produksi_bulanan_simulasi
     })
     
-    # --- MEMBUAT GRAFIK BAR MERAH (Seperi Request) ---
+    # --- 2. MEMBUAT GRAFIK (CLEAN LOOK) ---
+    warna_bar = '#e74c3c' if max(faktor_musim) > 1.10 else '#f39c12'
+    
     fig_monthly = px.bar(
         df_monthly, 
         x='Bulan', 
         y='Produksi (kWh)',
-        text_auto='.0f', # Tampilkan angka di atas bar
-        title=f"Monthly Photovoltaic Power Output ({provinsi_pilihan})",
-        color_discrete_sequence=['#e74c3c'] # Warna Merah
+        text_auto='.0f', # Angka tetap ada di atas batang, tapi rapi
+        title=f"Profil Energi Bulanan - {provinsi_pilihan}",
+        color_discrete_sequence=[warna_bar]
     )
     
     fig_monthly.update_layout(
-        yaxis_title="Energy (kWh)",
+        yaxis_title="Energi (kWh)",
         xaxis_title="",
-        bargap=0.3
+        bargap=0.3,
+        plot_bgcolor='rgba(0,0,0,0)',
+        hovermode="x unified" # Hover effect yang elegan
     )
     
-    # Tambahkan Label untuk Bulan Puncak (Peak)
-    peak_val = max(produksi_bulanan_simulasi)
-    peak_month = bulan_list[produksi_bulanan_simulasi.index(peak_val)]
-    
-    fig_monthly.add_annotation(
-        x=peak_month, y=peak_val,
-        text=f"Peak: {peak_val:.0f} kWh",
-        showarrow=True, arrowhead=1,
-        bgcolor="white", bordercolor="#e74c3c"
-    )
 
     st.plotly_chart(fig_monthly, use_container_width=True)
     
-    # Ringkasan Tahunan Kecil di Bawah Grafik
-    c_info1, c_info2 = st.columns(2)
-    total_tahunan = sum(produksi_bulanan_simulasi)
-    c_info1.metric("Total Produksi Setahun", f"{total_tahunan/1000:.2f} MWh")
-    c_info2.metric("Rata-rata Bulanan", f"{total_tahunan/12:.1f} kWh")
+    # Ringkasan Bawah
+    c1, c2 = st.columns(2)
+    c1.metric("Total Produksi Setahun", f"{sum(produksi_bulanan_simulasi)/1000:.2f} MWh")
+    c2.metric("Variabilitas Musim", "Tinggi (Monsun)" if max(faktor_musim) > 1.10 else "Stabil (Ekuatorial)")
 
 # GRAFIK 4: Analisis Emisi (Donut)
 with tab4:
-    st.subheader("Porsi Pengurangan Jejak Karbon (CO₂)")
+    st.subheader("Total Pengurangan Jejak Karbon (CO₂)")
     
     c_don, c_txt = st.columns([1.5, 1])
     
