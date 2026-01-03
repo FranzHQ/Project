@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,7 +6,7 @@ import plotly.graph_objects as go
 
 # --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(
-    page_title="Eco-Cost Analyzer", 
+    page_title="Solar Analyzer", 
     layout="wide",
     page_icon="☀️"
 )
@@ -73,10 +72,8 @@ st.markdown("""
 # --- 3. KONSTANTA PROYEK ---
 TARIF_PLN = 1400 
 FILE_DATA = 'produksi_emisi_provinsi.csv' 
-# [REQUEST] Batas Wp sampai 550
 WP_CHOICES = [300, 350, 400, 450, 500, 550] 
 MIN_PV_MODULES = 1 
-# [REQUEST] Batas Modul sampai 50
 MAX_PV_MODULES = 50 
 TAHUN_ANALISIS = 15 
 ASUMSI_INFLASI_LISTRIK = 0.05 
@@ -124,7 +121,6 @@ if data_solar.empty:
 
 
 # --- 5. HEADER (JUDUL MENGAMBANG DI BACKGROUND) ---
-# Menggunakan HTML khusus agar judul ada di atas gambar background
 st.markdown("""
     <div class="hero-banner">
         <h1>☀️ Analisis Penghematan Biaya dan Pengurangan Emisi Ketika Menggunakan PV Rumahan</h1>
@@ -149,7 +145,7 @@ with col_input1:
         key='provinsi_key' 
     )
     
-    # [REQUEST] Tampilkan Info Wilayah (PV Out & Emisi)
+    # Data Wilayah
     data_lokasi = data_solar[data_solar['Provinsi'] == provinsi_pilihan].iloc[0]
     radiasi_harian = data_lokasi['Produksi_Harian_kWh']
     faktor_emisi_lokal = data_lokasi['Faktor_Emisi_kg_per_kWh']
@@ -175,7 +171,7 @@ with col_input2:
 with col_input3:
     wp_pilihan = st.selectbox(
         "Pilih Kapasitas 1 Modul PV (Watt Peak/Wp):",
-        WP_CHOICES, # [REQUEST] List cuma sampai 550
+        WP_CHOICES, 
         index=WP_CHOICES.index(550),
         key='pv_module_watt'
     )
@@ -183,7 +179,7 @@ with col_input3:
     jumlah_modul = st.number_input(
         "Jumlah Modul PV yang Dipasang:",
         min_value=MIN_PV_MODULES,
-        max_value=MAX_PV_MODULES, # [REQUEST] Max 50
+        max_value=MAX_PV_MODULES, 
         value=st.session_state['pv_module_count'],
         step=1,
         key='pv_module_count'
@@ -195,10 +191,7 @@ with col_input3:
     st.markdown(f"Kapasitas Total PV Anda: **{kapasitas_pv_kwp:.2f} kWp**")
 
 
-# --- BAGIAN 2: PROSES ALGORITMA (TIDAK DIUBAH - COPY PASTE KODE ASLI) ---
-
-# A. Lookup Data Spesifik Lokasi (Sudah diambil diatas, pakai variabel yang sama)
-# radiasi_harian & faktor_emisi_lokal
+# --- BAGIAN 2: PROSES ALGORITMA ---
 
 # B. Perhitungan Konsumsi & Produksi
 konsumsi_kwh = tagihan_bulanan / TARIF_PLN
@@ -295,9 +288,16 @@ st.write("")
 
 # --- BAGIAN 4: VISUALISASI GRAFIK ---
 
-tab1, tab2, tab3, tab4 = st.tabs(["📉 Analisis Biaya Bulanan", "📈 Proyeksi Jangka Panjang", "🌍 Analisis Lingkungan (Emisi)", "ℹ️ Detail Teknis"])
+# UPDATE: Menambahkan "☀️ Profil Produksi Energi" di Tab ke-3
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📉 Analisis Biaya", 
+    "📈 Proyeksi ROI", 
+    "☀️ Profil Produksi Energi", 
+    "🌍 Lingkungan", 
+    "ℹ️ Detail Teknis"
+])
 
-# GRAFIK 1: Analisis Biaya Bulanan (PLOTLY BAR CHART)
+# GRAFIK 1: Analisis Biaya Bulanan
 with tab1:
     st.subheader("Komparasi Tagihan Listrik Bulanan")
     
@@ -326,7 +326,7 @@ with tab1:
             text=f"Hemat: {format_rupiah(penghematan_rp)}",
             showarrow=False,
             font=dict(size=14, color="black"),
-            bgcolor="rgba(255, 255, 0, 0.8)", # Background kuning supaya terbaca
+            bgcolor="rgba(255, 255, 0, 0.8)", 
             borderpad=4
         )
     
@@ -335,7 +335,7 @@ with tab1:
     st.markdown(f"**Tingkat Kemandirian Energi** dari PV Anda: **{skor_kemandirian:.1f}%**")
     st.progress(int(skor_kemandirian))
 
-# GRAFIK 2: Proyeksi Jangka Panjang (Line Chart)
+# GRAFIK 2: Proyeksi Jangka Panjang
 with tab2:
     st.subheader(f"Proyeksi Biaya Listrik Kumulatif Selama {TAHUN_ANALISIS} Tahun")
 
@@ -368,15 +368,75 @@ with tab2:
     * **Total Hemat Setelah {TAHUN_ANALISIS} Tahun:** {format_rupiah(total_biaya_tanpa_pv - total_biaya_dengan_pv)}
     """)
 
-# GRAFIK 3: Analisis Emisi (DONUT CHART - UPGRADE KE PLOTLY)
-# [REQUEST] Donut chart lebih bagus dan tidak eror matplotlib
+# GRAFIK 3 (BARU): Profil Produksi Energi (Simulasi Musiman)
 with tab3:
+    st.subheader(f"Estimasi Produksi Energi Bulanan di {provinsi_pilihan}")
+    st.caption("Grafik ini mensimulasikan fluktuasi produksi energi berdasarkan pola musim di Indonesia (Hujan vs Kemarau).")
+    
+    # --- LOGIKA SIMULASI MUSIMAN ---
+    bulan_list = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+    
+    # Faktor cuaca (1.0 = rata-rata). 
+    # Logika: Nov-Mar (Musim Hujan -> Faktor < 1), Apr-Okt (Kemarau -> Faktor > 1)
+    faktor_musim = [0.85, 0.88, 0.95, 1.0, 1.05, 1.08, 1.12, 1.15, 1.10, 1.02, 0.90, 0.85]
+    
+    # Jumlah hari dalam sebulan
+    days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    
+    produksi_bulanan_simulasi = []
+    
+    for i in range(12):
+        # Rumus: Produksi Harian Rata2 * Jumlah Hari * Faktor Cuaca
+        prod = produksi_pv_harian * days_in_month[i] * faktor_musim[i]
+        produksi_bulanan_simulasi.append(prod)
+        
+    df_monthly = pd.DataFrame({
+        'Bulan': bulan_list,
+        'Produksi (kWh)': produksi_bulanan_simulasi
+    })
+    
+    # --- MEMBUAT GRAFIK BAR MERAH (Seperi Request) ---
+    fig_monthly = px.bar(
+        df_monthly, 
+        x='Bulan', 
+        y='Produksi (kWh)',
+        text_auto='.0f', # Tampilkan angka di atas bar
+        title=f"Monthly Photovoltaic Power Output ({provinsi_pilihan})",
+        color_discrete_sequence=['#e74c3c'] # Warna Merah
+    )
+    
+    fig_monthly.update_layout(
+        yaxis_title="Energy (kWh)",
+        xaxis_title="",
+        bargap=0.3
+    )
+    
+    # Tambahkan Label untuk Bulan Puncak (Peak)
+    peak_val = max(produksi_bulanan_simulasi)
+    peak_month = bulan_list[produksi_bulanan_simulasi.index(peak_val)]
+    
+    fig_monthly.add_annotation(
+        x=peak_month, y=peak_val,
+        text=f"Peak: {peak_val:.0f} kWh",
+        showarrow=True, arrowhead=1,
+        bgcolor="white", bordercolor="#e74c3c"
+    )
+
+    st.plotly_chart(fig_monthly, use_container_width=True)
+    
+    # Ringkasan Tahunan Kecil di Bawah Grafik
+    c_info1, c_info2 = st.columns(2)
+    total_tahunan = sum(produksi_bulanan_simulasi)
+    c_info1.metric("Total Produksi Setahun", f"{total_tahunan/1000:.2f} MWh")
+    c_info2.metric("Rata-rata Bulanan", f"{total_tahunan/12:.1f} kWh")
+
+# GRAFIK 4: Analisis Emisi (Donut)
+with tab4:
     st.subheader("Porsi Pengurangan Jejak Karbon (CO₂)")
     
     c_don, c_txt = st.columns([1.5, 1])
     
     with c_don:
-        # Menggunakan Plotly Pie Chart (Donut)
         labels = ['Dicegah (PV)', 'Sisa (PLN)']
         values = [emisi_dicegah_grafik, emisi_tersisa_pln]
         colors = ['#2ecc71', '#bdc3c7']
@@ -384,13 +444,12 @@ with tab3:
         fig_donut = go.Figure(data=[go.Pie(
             labels=labels, 
             values=values, 
-            hole=.6, # Efek Donut
+            hole=.6, 
             marker_colors=colors,
             hoverinfo="label+value+percent",
             textinfo='percent'
         )])
         
-        # Tambah teks di tengah donut
         fig_donut.update_layout(
             annotations=[dict(text=f"{skor_kemandirian:.0f}%", x=0.5, y=0.5, font_size=20, showarrow=False)],
             showlegend=True,
@@ -406,52 +465,28 @@ with tab3:
         \n🚗 Menghapus **{int(emisi_dicegah_total*5)} km** perjalanan mobil
         """)
 
-# TAB 4: Detail Teknis (DIKEMBALIKAN SESUAI REQUEST)
-with tab4:
+# TAB 5: Detail Teknis
+with tab5:
     col_tech1, col_tech2 = st.columns(2)
     
-    # BOX 1: Sistem & Energi
     with col_tech1:
         st.markdown("### ⚙️ Sistem & Energi")
         st.markdown("Ringkasan teknis instalasi dan produksi energi.")
         st.write("---")
         
         data_sistem = pd.DataFrame({
-            "Keterangan": [
-                "Kapasitas PV Total",
-                "Jumlah Modul",
-                "Kapasitas 1 Modul",
-                "Produksi Energi Bulanan"
-            ],
-            "Nilai": [
-                f"{kapasitas_pv_kwp:.2f} kWp",
-                f"{jumlah_modul} unit",
-                f"{wp_pilihan} Wp",
-                f"{produksi_pv_bulanan:.2f} kWh"
-            ]
+            "Keterangan": ["Kapasitas PV Total", "Jumlah Modul", "Kapasitas 1 Modul", "Produksi Energi Bulanan"],
+            "Nilai": [f"{kapasitas_pv_kwp:.2f} kWp", f"{jumlah_modul} unit", f"{wp_pilihan} Wp", f"{produksi_pv_bulanan:.2f} kWh"]
         }).set_index('Keterangan')
         st.table(data_sistem)
         
-    # BOX 2: Finansial & Dampak
     with col_tech2:
         st.markdown("### 💸 Finansial & Dampak")
         st.markdown("Rincian hitungan biaya dan manfaat lingkungan.")
         st.write("---")
         
         data_finansial = pd.DataFrame({
-            "Keterangan": [
-                "Biaya Instalasi Awal",
-                "Tagihan Bulanan Baru",
-                "Penghematan Bulanan",
-                "Masa Balik Modal",
-                f"Total Emisi Dicegah ({TAHUN_ANALISIS} Thn)"
-            ],
-            "Nilai": [
-                format_rupiah(biaya_instalasi_pv),
-                format_rupiah(tagihan_baru),
-                format_rupiah(penghematan_rp),
-                payback_display,
-                f"{emisi_total_ton:.1f} ton CO₂"
-            ]
+            "Keterangan": ["Biaya Instalasi Awal", "Tagihan Bulanan Baru", "Penghematan Bulanan", "Masa Balik Modal", f"Total Emisi Dicegah ({TAHUN_ANALISIS} Thn)"],
+            "Nilai": [format_rupiah(biaya_instalasi_pv), format_rupiah(tagihan_baru), format_rupiah(penghematan_rp), payback_display, f"{emisi_total_ton:.1f} ton CO₂"]
         }).set_index('Keterangan')
         st.table(data_finansial)
