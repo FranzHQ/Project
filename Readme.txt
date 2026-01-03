@@ -100,8 +100,9 @@ mengganti input.
 2. Grafik Visual (Tab Menu)
    - Tab 1 (Analisis Biaya): Grafik batang perbandingan tagihan "Sebelum" vs "Sesudah".
    - Tab 2 (Proyeksi Jangka Panjang): Garis grafik keuntungan finansial Anda selama 15 tahun ke depan.
-   - Tab 3 (Dampak Lingkungan): Diagram donat yang menunjukkan seberapa "Hijau" energi rumah Anda.
-   - Tab 4 (Detail Teknis): Tabel rincian angka lengkap untuk keperluan teknis.
+   - Tab 3 (Estimasi Energi Bulanan): Grafik batang untuk menganalisis energi yang dihasilkan setiap bulan, dan perbandingan musim.
+   - Tab 4 (Dampak Lingkungan): Diagram donat yang menunjukkan seberapa "Hijau" energi rumah Anda.
+   - Tab 5 (Detail Teknis): Tabel rincian angka lengkap untuk keperluan teknis.
 
 
 CATATAN TAMBAHAN
